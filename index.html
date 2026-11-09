@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Odyssey Partners: Website Metrics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root{--navy:#050A30;--navy2:#0B1640;--panel:#0E1B4D;--teal:#2EC4B6;--teal2:#7FE3D8;--gold:#F5B841;--coral:#FF6B6B;--txt:#E8EEF8;--muted:#8E9AC0;--grid:#24336B}
+*{box-sizing:border-box}body{margin:0;background:var(--navy);color:var(--txt);font:14px/1.45 system-ui,Segoe UI,Roboto,sans-serif}
+header{display:flex;align-items:center;gap:20px;padding:18px 28px;background:var(--navy2);border-bottom:2px solid var(--teal);flex-wrap:wrap}
+header img{height:54px}header h1{margin:0;font-size:22px;font-weight:600}header .stamp{margin-left:auto;color:var(--muted);font-size:13px;text-align:right}
+main{padding:20px 28px;max-width:1500px;margin:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.kpi{background:var(--panel);border-radius:10px;padding:12px 14px}.kpi b{display:block;font-size:24px;color:var(--teal2)}.kpi span{color:var(--muted);font-size:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px}
+.card{background:var(--panel);border-radius:10px;padding:14px 16px;min-width:0}.card.wide{grid-column:1/-1}
+.card h2{margin:0 0 4px;font-size:15px;font-weight:600}.card .sub{color:var(--muted);font-size:12px;margin-bottom:8px}
+.cv{position:relative;height:300px}
+.rng{display:inline-flex;gap:4px;float:right}.rng button,select{background:var(--navy2);color:var(--txt);border:1px solid var(--grid);border-radius:6px;padding:4px 10px;cursor:pointer}
+.rng button.on{background:var(--teal);color:var(--navy);border-color:var(--teal)}
+table{width:100%;border-collapse:collapse;font-size:12.5px}th,td{padding:5px 8px;border-bottom:1px solid var(--grid);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}th{cursor:pointer;color:var(--teal2);position:sticky;top:0;background:var(--panel)}
+.tw{max-height:520px;overflow:auto}td.lead{color:var(--gold);font-weight:600}
+.pt td:first-child{max-width:420px;overflow:hidden;text-overflow:ellipsis}
+footer{color:var(--muted);font-size:12px;padding:10px 28px 30px;text-align:center}
+</style></head><body>
+<header><img src="logo.png" alt="Odyssey Partners Consulting"><h1>Odyssey Partners: Website Metrics</h1>
+<div class="stamp">Last updated <span id="upd"></span><br>History: <span id="hist"></span></div></header>
+<main>
+<div class="kpis" id="kpis"></div>
+<div class="grid">
+<div class="card wide"><h2>Daily sessions <span class="rng" id="rng"><button data-r="all" class="on">All</button><button data-r="90">90d</button><button data-r="30">30d</button></span></h2>
+<div class="sub">Bars: sessions per day. Line: 7-day average. Gold markers: days with leads (forms submitted + clicks to contact).</div><div class="cv" style="height:340px"><canvas id="cSess"></canvas></div></div>
+<div class="card"><h2>Traffic sources over time</h2><div class="sub">Sessions by channel for each snapshot period. Wix only reports channels by period, not by day.</div><div class="cv"><canvas id="cSrcT"></canvas></div></div>
+<div class="card"><h2>Traffic sources (total)</h2><div class="sub" id="srcSub"></div><div class="cv"><canvas id="cSrc"></canvas></div></div>
+<div class="card"><h2>Time on site and bounce rate</h2><div class="sub">7-day averages of avg. session duration (min) and bounce rate (%)</div><div class="cv"><canvas id="cEng"></canvas></div></div>
+<div class="card"><h2>Google Search: clicks and impressions</h2><div class="sub">Daily, from Search Console (lags 2–3 days)</div><div class="cv"><canvas id="cGsc"></canvas></div></div>
+<div class="card"><h2>Top pages <select id="pgSel"></select></h2><div class="sub">By page views for the selected period</div><div class="tw" style="max-height:320px"><table class="pt" id="tPages"></table></div></div>
+<div class="card"><h2>Top referrers and search queries</h2><div class="sub" id="refSub"></div><div class="tw" style="max-height:320px"><table class="pt" id="tRef"></table><br><table class="pt" id="tQ"></table></div></div>
+<div class="card wide"><h2>Daily history (full)</h2><div class="sub">Click a column header to sort. Gold = lead days.</div><div class="tw"><table id="tDaily"></table></div></div>
+</div></main>
+<footer>Source: Wix Analytics and Google Search Console. Private dashboard, not indexed.</footer>
+<script>
+const C={teal:'#2EC4B6',teal2:'#7FE3D8',gold:'#F5B841',coral:'#FF6B6B',muted:'#8E9AC0',grid:'#24336B',txt:'#E8EEF8'};
+const PAL=['#2EC4B6','#F5B841','#7FE3D8','#FF6B6B','#8E9AC0','#5B8DEF','#C77DFF','#4ADE80'];
+Chart.defaults.color=C.muted;Chart.defaults.borderColor=C.grid;Chart.defaults.font.family='system-ui,Segoe UI,Roboto,sans-serif';
+const n=v=>v==null?null:+v, fmt=v=>v==null?'–':(+v).toLocaleString(), sum=(a,k)=>a.reduce((s,r)=>s+(+r[k]||0),0);
+const ma=(arr,w=7)=>arr.map((_,i)=>{const s=arr.slice(Math.max(0,i-w+1),i+1).filter(v=>v!=null);return s.length?s.reduce((a,b)=>a+b,0)/s.length:null});
+const lab=s=>s.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
+const per=p=>`${p.start} → ${p.end}`;
+fetch('data.json',{cache:'no-store'}).then(r=>r.json()).then(D=>{
+ const d=D.daily;document.getElementById('upd').textContent=D.updated_et;document.getElementById('hist').textContent=`${D.first_date} → ${D.last_date} (${d.length} days)`;
+ const sess=r=>r.sessions!=null?+r.sessions:n(r.sm_sessions), leads=r=>(+r.forms_submitted||0)+(+r.clicks_to_contact||0);
+ // KPIs
+ const k=[['Sessions',d.reduce((s,r)=>s+(sess(r)||0),0)],['Unique visitors',sum(d,'unique_visitors')],['Page views',sum(d,'page_views')],['Forms submitted',sum(d,'forms_submitted')],['Clicks to contact',sum(d,'clicks_to_contact')],['Google clicks',sum(d,'gsc_clicks')],['Google impressions',sum(d,'gsc_impressions')]];
+ document.getElementById('kpis').innerHTML=k.map(([a,b])=>`<div class="kpi"><b>${fmt(b)}</b><span>${a} (all time)</span></div>`).join('');
+ // Sessions chart
+ let sc;function drawSess(r){const sub=r==='all'?d:d.slice(-r);const s=sub.map(sess),m=ma(d.map(sess)).slice(d.length-sub.length);
+  const ld=sub.map((x,i)=>leads(x)>0?{x:x.date,y:(s[i]||0)+0.5,l:x}:null).filter(Boolean);
+  sc&&sc.destroy();sc=new Chart(cSess,{data:{labels:sub.map(x=>x.date),datasets:[
+   {type:'bar',label:'Sessions',data:s,backgroundColor:'rgba(46,196,182,.45)',order:3},
+   {type:'line',label:'7-day avg',data:m,borderColor:C.teal2,pointRadius:0,borderWidth:2.5,tension:.3,order:2},
+   {type:'scatter',label:'Lead day',data:ld,pointStyle:'star',pointRadius:9,backgroundColor:C.gold,borderColor:C.gold,order:1}]},
+   options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{x:{type:'category',ticks:{maxTicksLimit:14}},y:{beginAtZero:true}},
+   plugins:{tooltip:{callbacks:{label:c=>c.dataset.label==='Lead day'?`Leads: ${c.raw.l.forms_submitted||0} form(s), ${c.raw.l.clicks_to_contact||0} contact click(s)`:`${c.dataset.label}: ${c.parsed.y==null?'–':c.parsed.y.toFixed(c.datasetIndex?1:0)}`}}}}});}
+ document.querySelectorAll('#rng button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#rng button').forEach(x=>x.classList.remove('on'));b.classList.add('on');drawSess(b.dataset.r==='all'?'all':+b.dataset.r)});drawSess('all');
+ // Sources
+ const B=D.breakdowns, cat=B.referrer_category_name||[];
+ const cats=[...new Set(cat.flatMap(p=>p.rows.map(r=>r.referrer_category_name)))];
+ new Chart(cSrcT,{type:'bar',data:{labels:cat.map(per),datasets:cats.map((c,i)=>({label:lab(c),backgroundColor:PAL[i%8],data:cat.map(p=>{const r=p.rows.find(r=>r.referrer_category_name===c);return r?r.sessions_count:0})}))},
+  options:{maintainAspectRatio:false,scales:{x:{stacked:true},y:{stacked:true,beginAtZero:true}}}});
+ const span=p=>Date.parse(p.end)-Date.parse(p.start), full=cat.reduce((a,p)=>!a||span(p)>span(a)||(span(p)===span(a)&&p.end>a.end)?p:a,null);
+ if(full){document.getElementById('srcSub').textContent=`Sessions by channel, ${per(full)} (longest window Wix retains)`;
+  new Chart(cSrc,{type:'doughnut',data:{labels:full.rows.map(r=>lab(r.referrer_category_name)),datasets:[{data:full.rows.map(r=>r.sessions_count),backgroundColor:PAL,borderColor:'#0E1B4D'}]},options:{maintainAspectRatio:false,plugins:{legend:{position:'right'}}}});}
+ // Engagement
+ const dur=ma(d.map(r=>r.avg_session_duration_sec==null?null:r.avg_session_duration_sec/60)),br=ma(d.map(r=>r.bounce_rate==null?null:r.bounce_rate*100));
+ new Chart(cEng,{type:'line',data:{labels:d.map(r=>r.date),datasets:[{label:'Avg time on site (min)',data:dur,borderColor:C.teal,pointRadius:0,tension:.3,yAxisID:'y'},{label:'Bounce rate (%)',data:br,borderColor:C.coral,pointRadius:0,tension:.3,yAxisID:'y1'}]},
+  options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{x:{ticks:{maxTicksLimit:10}},y:{beginAtZero:true,title:{display:true,text:'min'}},y1:{position:'right',min:0,max:100,grid:{drawOnChartArea:false},title:{display:true,text:'%'}}}}});
+ // GSC
+ new Chart(cGsc,{data:{labels:d.map(r=>r.date),datasets:[{type:'bar',label:'Clicks',data:d.map(r=>n(r.gsc_clicks)),backgroundColor:C.gold,yAxisID:'y'},{type:'line',label:'Impressions',data:d.map(r=>n(r.gsc_impressions)),borderColor:C.teal,pointRadius:0,tension:.3,yAxisID:'y1'}]},
+  options:{maintainAspectRatio:false,interaction:{mode:'index',intersect:false},scales:{x:{ticks:{maxTicksLimit:10}},y:{beginAtZero:true,title:{display:true,text:'clicks'}},y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false},title:{display:true,text:'impressions'}}}}});
+ // Tables
+ const tbl=(el,cols,rows)=>{el.innerHTML=`<tr>${cols.map(c=>`<th>${c[1]}</th>`).join('')}</tr>`+rows.map(r=>`<tr>${cols.map(c=>`<td title="${r[c[0]]??''}">${c[2]?c[2](r[c[0]]):fmt(r[c[0]])}</td>`).join('')}</tr>`).join('')};
+ const pg=(B.page_url||[]).slice().reverse(),sel=document.getElementById('pgSel');sel.innerHTML=pg.map((p,i)=>`<option value="${i}">${per(p)}</option>`).join('');
+ const sec=v=>v==null?'–':`${Math.floor(v/60)}m ${String(Math.round(v%60)).padStart(2,'0')}s`,pct=v=>v==null?'–':(v*100).toFixed(0)+'%',txt=v=>v??'';
+ const drawPg=()=>{const p=pg[sel.value];if(p)tbl(tPages,[['page_url_from','Page',txt],['views_count','Views'],['sessions_count','Sessions'],['page_time_seconds_avg','Avg time',sec],['exit_ratio','Exit',pct]],p.rows.slice(0,20))};
+ // default to longest recent period
+ let bi=0;pg.forEach((p,i)=>{if(Date.parse(p.end)-Date.parse(p.start)>Date.parse(pg[bi].end)-Date.parse(pg[bi].start))bi=i});sel.value=bi;sel.onchange=drawPg;drawPg();
+ const rs=(B.referrer_source_name||[]),rp=rs.reduce((a,p)=>!a||(Date.parse(p.end)-Date.parse(p.start))>(Date.parse(a.end)-Date.parse(a.start))?p:a,null);
+ const gq=(B.gsc_query||[]).slice(-1)[0];
+ document.getElementById('refSub').textContent=`Referrers ${rp?per(rp):''}; Google queries ${gq?per(gq):''}`;
+ if(rp)tbl(tRef,[['referrer_source_name','Referrer',txt],['sessions_count','Sessions'],['visitors_count','Visitors'],['site_time_seconds_avg','Avg time',sec]],rp.rows);
+ if(gq)tbl(tQ,[['query','Search query',txt],['clicks','Clicks'],['impressions','Impr.'],['position','Pos.',v=>v==null?'–':(+v).toFixed(1)]],gq.rows.slice().sort((a,b)=>b.clicks-a.clicks||b.impressions-a.impressions).slice(0,20));
+ // Daily sortable
+ const dc=[['date','Date',txt],['sessions','Sessions'],['unique_visitors','Visitors'],['page_views','Views'],['forms_submitted','Forms'],['clicks_to_contact','Contact clicks'],['avg_session_duration_sec','Avg time',sec],['bounce_rate','Bounce',pct],['pages_per_session','Pages/sess',v=>v==null?'–':(+v).toFixed(2)],['gsc_clicks','G clicks'],['gsc_impressions','G impr.'],['gsc_avg_position','G pos.',v=>v==null?'–':(+v).toFixed(1)]];
+ let rows=d.slice().reverse(),sk='date',sd=-1;
+ const drawD=()=>{tbl(tDaily,dc,rows);tDaily.querySelectorAll('tr').forEach((tr,i)=>{if(i&&leads(rows[i-1])>0)[4,5].forEach(j=>tr.children[j].classList.add('lead'))});
+  tDaily.querySelectorAll('th').forEach((th,i)=>{th.textContent=dc[i][1]+(dc[i][0]===sk?(sd>0?' ▲':' ▼'):'');th.onclick=()=>{const key=dc[i][0];sd=key===sk?-sd:-1;sk=key;
+   rows.sort((a,b)=>{const x=a[key],y=b[key];if(x==null)return 1;if(y==null)return -1;return (x>y?1:x<y?-1:0)*sd});drawD()}})};drawD();
+}).catch(e=>{document.querySelector('main').innerHTML='<p>Could not load data.json: '+e+'</p>'});
+</script></body></html>
